@@ -4,36 +4,16 @@ import time
 
 
 class Tracker:
-    def __init__(self, save_interval, save_config, curt_best=float('-inf')):
+    def __init__(self, save_interval, save_config):
         self.counter = 0
         self.best_value_trace = []
-        self.curt_best = curt_best #float('-inf')
+        self.curt_best = float('inf')
         self.curt_best_x = []
         self.save_interval = save_interval
         self.save_config = save_config
         self.start_time = time.time()
         
-    def track(self, result):
-        self.counter += 1
-        if result > self.curt_best:
-            self.curt_best = result
-        self.best_value_trace.append((
-            self.counter,
-            self.curt_best,
-            time.time() - self.start_time
-        ))
-        
-        if self.counter % self.save_interval == 0:
-            df_data = pd.DataFrame(self.best_value_trace, columns=['x', 'y', 't'])
-            save_results(
-                self.save_config['root_dir'],
-                self.save_config['algo'],
-                self.save_config['func'],
-                self.save_config['seed'],
-                df_data,
-            )
-
-    def track_minimize(self, x, result):
+    def track(self, x, result):
         self.counter += 1
         if result < self.curt_best:
             self.curt_best = result

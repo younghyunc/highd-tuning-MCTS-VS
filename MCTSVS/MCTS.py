@@ -111,8 +111,11 @@ class MCTS:
             gpr = get_gpr_model()
             # print(ipt_x)
             # print(train_y)
-            gpr.fit(ipt_x, train_y)
-            new_ipt_x, _ = optimize_acqf(len(feature_idx), gpr, ipt_x, train_y, self.sample_batch_size, ipt_lb, ipt_ub)
+            ipt_x_ = ipt_x
+            train_y_ = [-y for y in train_y]
+            gpr.fit(ipt_x, train_y_)
+            new_ipt_x, _ = optimize_acqf(len(feature_idx), gpr, ipt_x, train_y_, self.sample_batch_size, ipt_lb, ipt_ub)
+            #print ("new_ipt_x: ", new_ipt_x)
             # get unimportant variables
             X_sample, Y_sample = [], []
             for i in range(len(new_ipt_x)):
@@ -130,8 +133,9 @@ class MCTS:
                 X_sample.append(new_x)
                 Y_sample.append(value)
         elif self.ipt_solver == 'turbo':
+            #f  = lambda x: -self.func(x),              # Handle to objective function
             turbo1 = Turbo1_VS_Component(
-                f  = lambda x: -self.func(x),              # Handle to objective function
+                f  = lambda x: self.func(x),              # Handle to objective function
                 lb = ipt_lb,           # Numpy array specifying lower bounds
                 ub = ipt_ub,           # Numpy array specifying upper bounds
                 n_init = 1,            # unused parameter
@@ -146,9 +150,10 @@ class MCTS:
                 dtype="float32",        # float64 or float32
             )
             
-            Y_init = -np_train_y
+            #Y_init = -np_train_y
+            Y_init = np_train_y
             X_sample, Y_sample = turbo1.optimize(ipt_x, Y_init, feature_idx, self.uipt_solver, n=1)
-            Y_sample = [-y for y in Y_sample]
+            #Y_sample = [-y for y in Y_sample]
             
             for new_x, value in zip(X_sample, Y_sample):
                 self.samples.append( (new_x, value) )
@@ -177,16 +182,18 @@ class MCTS:
                 X_sample.append(new_x)
                 Y_sample.append(value)
         elif self.ipt_solver == 'saasbo':
-            Y_init = -np_train_y
+            Y_init = np_train_y
+            #Y_init = -np_train_y
             new_ipt_x = run_saasbo_one_epoch(
                 ipt_x,
                 Y_init,
                 len(feature_idx),
                 3,
-                lambda x: -self.func(x),
+                lambda x: self.func(x),
                 ipt_lb,
                 ipt_ub,
             )
+                #lambda x: -self.func(x),
             # get unimportant variables
             X_sample, Y_sample = [], []
             for i in range(len(new_ipt_x)):
@@ -208,7 +215,7 @@ class MCTS:
         
         for idx, y in enumerate(Y_sample):
             self.sample_counter += 1
-            if y > self.curt_best_value:
+            if y < self.curt_best_value:
                 self.curt_best_sample = X_sample[idx]
                 self.curt_best_value = y
                 self.best_value_trace.append( (self.sample_counter, self.curt_best_value) )
@@ -291,29 +298,29 @@ class MCTS:
                 print('='*10)
                 print('iteration: {}'.format(idx))
                 print('='*10)
-            
+
             if self.num_select_right >= self.select_right_threshold:
                 self.dynamic_treeify()
                 # print('rebuild')
             leaf, path = self.select(verbose)
             # self.selected_variables.append((idx, leaf.active_dims_idx))
             self.selected_variables.append((self.sample_counter, leaf.active_dims_idx))
-            
+
             for i in range(1):
                 new_feature, new_comp_features = leaf.sample_features(self.feature_batch_size)
                 all_features = feature_dedup(new_feature + new_comp_features)
-                
+
                 for feature in all_features:
                     if ndarray2str(feature) not in self.feature2sample_map.keys():
                         self.features.append(feature)
                     X_sample, Y_sample = self.collect_samples(feature)
                     self.backpropogate(leaf, feature, X_sample, Y_sample)
-                    
+
             left_kid, right_kid = leaf.split(self.split_type)
             if left_kid is not None and right_kid is not None:
                 self.nodes.append(left_kid)
                 self.nodes.append(right_kid)
-            
+
             if verbose:
                 self.print_tree()
                 print('axis_score argsort:', np.argsort(self.ROOT.axis_score)[: : -1])
@@ -329,6 +336,8 @@ class MCTS:
             idx += 1
             if self.sample_counter >= max_samples:
                 break
+
+        return self.samples
             
     def update_feature2sample_map(self, feature, sample, y):
         feature_str = ndarray2str(feature)
