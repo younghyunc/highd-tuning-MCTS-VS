@@ -337,8 +337,70 @@ class MCTS:
             if self.sample_counter >= max_samples:
                 break
 
-        return self.samples
-            
+        x = [list(sample[0]) for sample in self.samples]
+        y = [sample[1] for sample in self.samples]
+
+        return x, y
+
+    def search_with_history(self, history_x, history_y, max_samples, ipt_solver='bo', verbose=True):
+        self.ipt_solver = ipt_solver
+
+        if history_x == None or history_y == None:
+            self.samples = []
+        else:
+            self.samples = [(np.array(history_x[i]), history_y[i]) for i in range(len(history_y))]
+
+        idx = 0
+        while True:
+            if verbose:
+                print('')
+                print('='*10)
+                print('iteration: {}'.format(idx))
+                print('='*10)
+
+            if self.num_select_right >= self.select_right_threshold:
+                self.dynamic_treeify()
+                # print('rebuild')
+            leaf, path = self.select(verbose)
+            # self.selected_variables.append((idx, leaf.active_dims_idx))
+            self.selected_variables.append((self.sample_counter, leaf.active_dims_idx))
+
+            for i in range(1):
+                new_feature, new_comp_features = leaf.sample_features(self.feature_batch_size)
+                all_features = feature_dedup(new_feature + new_comp_features)
+
+                for feature in all_features:
+                    if ndarray2str(feature) not in self.feature2sample_map.keys():
+                        self.features.append(feature)
+                    X_sample, Y_sample = self.collect_samples(feature)
+                    self.backpropogate(leaf, feature, X_sample, Y_sample)
+
+            left_kid, right_kid = leaf.split(self.split_type)
+            if left_kid is not None and right_kid is not None:
+                self.nodes.append(left_kid)
+                self.nodes.append(right_kid)
+
+            if verbose:
+                self.print_tree()
+                print('axis_score argsort:', np.argsort(self.ROOT.axis_score)[: : -1])
+                print('total samples: {}'.format(len(self.samples)))
+                print('current best f(x): {}'.format(self.curt_best_value))
+                # print('current best x: {}'.format(self.curt_best_sample))
+                node = self.ROOT
+                while len(node.kids) > 0:
+                    node = node.kids[0]
+                print(node.active_dims_idx)
+                print(node.active_axis_score)
+
+            idx += 1
+            if self.sample_counter >= max_samples:
+                break
+
+        x = [list(sample[0]) for sample in self.samples]
+        y = [sample[1] for sample in self.samples]
+
+        return x, y
+
     def update_feature2sample_map(self, feature, sample, y):
         feature_str = ndarray2str(feature)
         if self.feature2sample_map.get(feature_str, None) is None:
