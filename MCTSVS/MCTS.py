@@ -4,7 +4,7 @@ from MCTSVS.Node import Node
 from uipt_variable_strategy import UiptRandomStrategy, UiptBestKStrategy, UiptAverageBestKStrategy, UiptCopyStrategy, UiptMixStrategy
 from utils import bernoulli, latin_hypercube, from_unit_cube, feature_complementary, ndarray2str, feature_dedup
 from inner_optimizer import Turbo1_VS_Component
-from inner_optimizer import run_saasbo_one_epoch
+from inner_optimizer import run_saasbo_one_epoch, get_saasbo_one_epoch
 
 
 class MCTS:
@@ -370,6 +370,9 @@ class MCTS:
                 all_features = feature_dedup(new_feature + new_comp_features)
 
                 for feature in all_features:
+                    print ("feature: ", feature)
+                    print ("all_features: ", all_features)
+                    print ("sample_counter: ", self.sample_counter)
                     if ndarray2str(feature) not in self.feature2sample_map.keys():
                         self.features.append(feature)
                     X_sample, Y_sample = self.collect_samples(feature)
@@ -400,6 +403,40 @@ class MCTS:
         y = [sample[1] for sample in self.samples]
 
         return x, y
+
+    def train_mcts_model(self, feature, ipt_solver, history_x, history_fx):
+        np_train_x = np.vstack(history_x)
+        np_train_y  = np.array(history_fx)
+        feature_idx = [idx for idx, i in enumerate(feature) if i == 1]
+        ipt_x = np_train_x[:, feature_idx]
+        ipt_lb = np.array([i for idx, i in enumerate(self.lb) if idx in feature_idx])
+        ipt_ub = np.array([i for idx, i in enumerate(self.ub) if idx in feature_idx])
+
+        if ipt_solver == 'bo':
+            gpr = get_gpr_model()
+            gpr.fit(ipt_x, history_fx)
+
+            XX_ = np.random.uniform(self.lb, self.ub)
+            X_ = np.array([[XX_[i] for i in feature_idx]])
+            predict_, sigma = gpr.predict(X_, return_std=True)
+
+            return gpr
+
+        elif ipt_solver == "saasbo":
+            Y_init = np_train_y
+            gp, y_target = get_saasbo_one_epoch(
+                ipt_x,
+                Y_init,
+                len(feature_idx),
+                lambda x: self.func(x),
+                ipt_lb,
+                ipt_ub,
+            )
+
+            X_ = np.array([[0 for i in feature_idx]])
+            predict_, sigma = gp.posterior(X_) #, return_std=True)
+
+            return gp
 
     def update_feature2sample_map(self, feature, sample, y):
         feature_str = ndarray2str(feature)

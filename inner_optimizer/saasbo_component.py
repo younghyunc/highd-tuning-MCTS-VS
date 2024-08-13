@@ -185,3 +185,82 @@ def run_saasbo_one_epoch(
     del gp  # Free memory
 
     return x_next
+
+def get_saasbo_one_epoch(
+    X,
+    Y,
+    dims,
+    f,
+    lb,
+    ub,
+    seed=None,
+    alpha=0.1,
+    num_warmup=512,
+    num_samples=256,
+    thinning=16,
+    kernel="rbf",
+    device="cpu",
+):
+
+    # if max_evals <= num_init_evals:
+    #     raise ValueError("Must choose max_evals > num_init_evals.")
+    if lb.shape != ub.shape or lb.ndim != 1:
+        raise ValueError("The lower/upper bounds lb and ub must have the same shape and be D-dimensional vectors.")
+    if alpha <= 0.0:
+        raise ValueError("The hyperparameter alpha must be positive.")
+    if device not in ["cpu", "gpu"]:
+        raise ValueError("The device must be cpu or gpu.")
+
+    numpyro.set_platform(device)
+    enable_x64()
+    numpyro.set_host_device_count(1)
+
+    max_exceptions = 3
+    num_exceptions = 0
+
+    # print(f"=== Iteration {len(Y)} ===", flush=True)
+    # standardize training data
+
+    # print(Y)
+    train_Y = (Y - Y.mean()) / Y.std()
+    y_target = train_Y.min().item()
+
+    # If for whatever reason we fail to return a query point above we choose one at random from the domain
+    # try:
+    start = time.time()
+    # define GP with SAAS prior
+    gp = SAASGP(
+        alpha=alpha,
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        max_tree_depth=6,
+        num_chains=1,
+        thinning=thinning,
+        verbose=False,
+        observation_variance=1e-6,
+        kernel=kernel,
+    )
+
+    # fit SAAS GP to training data
+    gp = gp.fit(X, train_Y)
+
+    return gp, y_target
+
+    #print(f"GP fitting took {time.time() - start:.2f} seconds")
+
+    #start = time.time()
+    ## do EI optimization using LBFGS
+    #x_next = optimize_ei_random(gp=gp, y_target=y_target, xi=0.0001, num_restarts_ei=batch_size, num_init=1024)
+    ## x_next = optimize_ei_local_search(gp=gp, y_target=y_target, xi=0.0, num_restarts_ei=batch_size, num_init=5000)
+    ## print(x_next.shape)
+    #print(f"Optimizing EI took {time.time() - start:.2f} seconds")
+
+    ## transform to original coordinates
+    ## y_next = f(lb + (ub - lb) * x_next)
+
+    ## X = np.vstack((X, deepcopy(x_next[None, :])))
+    ## Y = np.hstack((Y, deepcopy(y_next)))
+
+    #del gp  # Free memory
+
+    #return x_next

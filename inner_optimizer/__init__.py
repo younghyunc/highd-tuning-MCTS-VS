@@ -4,4 +4,4 @@ from inner_optimizer.turbo.turbo_1_component import Turbo1_Component, Turbo1_VS_
 
 from inner_optimizer.lamcts import MCTS
 
-from inner_optimizer.saasbo_component import run_saasbo_one_epoch
+from inner_optimizer.saasbo_component import run_saasbo_one_epoch, get_saasbo_one_epoch
