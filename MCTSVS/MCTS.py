@@ -345,9 +345,7 @@ class MCTS:
     def search_with_history(self, history_x, history_y, max_samples, ipt_solver='bo', verbose=True):
         self.ipt_solver = ipt_solver
 
-        if history_x == None or history_y == None:
-            self.samples = []
-        else:
+        if history_x != None and history_y != None:
             self.samples = [(np.array(history_x[i]), history_y[i]) for i in range(len(history_y))]
 
         idx = 0
@@ -370,9 +368,10 @@ class MCTS:
                 all_features = feature_dedup(new_feature + new_comp_features)
 
                 for feature in all_features:
-                    print ("feature: ", feature)
-                    print ("all_features: ", all_features)
-                    print ("sample_counter: ", self.sample_counter)
+                    if verbose:
+                        print ("feature: ", feature)
+                        print ("all_features: ", all_features)
+                        print ("sample_counter: ", self.sample_counter)
                     if ndarray2str(feature) not in self.feature2sample_map.keys():
                         self.features.append(feature)
                     X_sample, Y_sample = self.collect_samples(feature)
@@ -403,6 +402,22 @@ class MCTS:
         y = [sample[1] for sample in self.samples]
 
         return x, y
+
+    def get_features_batch(self, history_x, history_y, verbose=True):
+
+        if history_x != None and history_y != None:
+            self.samples = [(np.array(history_x[i]), history_y[i]) for i in range(len(history_y))]
+
+        if self.num_select_right >= self.select_right_threshold:
+            self.dynamic_treeify()
+
+        leaf, path = self.select(verbose)
+        self.selected_variables.append((self.sample_counter, leaf.active_dims_idx))
+
+        new_feature, new_comp_features = leaf.sample_features(self.feature_batch_size)
+        all_features = feature_dedup(new_feature + new_comp_features)
+
+        return all_features
 
     def train_mcts_model(self, feature, ipt_solver, history_x, history_fx):
         np_train_x = np.vstack(history_x)
