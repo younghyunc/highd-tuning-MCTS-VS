@@ -346,7 +346,7 @@ class MCTS:
         self.ipt_solver = ipt_solver
 
         if history_x != None and history_y != None:
-            self.samples = [(np.array(history_x[i]), history_y[i]) for i in range(len(history_y))]
+            self.samples = [(np.array(history_x[i]), np.float64(history_y[i])) for i in range(len(history_y))]
 
         idx = 0
         while True:
